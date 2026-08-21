@@ -36,9 +36,9 @@ export const mockCustomerProjects: CustomerProject[] = [
   },
   {
     id: 103,
-    name: "Satyakabir Internal CMS",
+    name: "Nidhi Info Tech Internal CMS",
     customerId: 3,
-    customerName: "Satyakabir Technologies",
+    customerName: "Nidhi Info Tech",
     totalAmount: 450000,
     paidAmount: 325000,
     status: "active",
@@ -154,8 +154,8 @@ export const mockReceipts: PaymentReceipt[] = [
     paymentMethod: "Bank transfer",
     transactionId: "NEFT-BS-001",
     generatedAt: "2026-05-20T14:30:00Z",
-    companyName: "Satyakabir Technologies Pvt. Ltd.",
-    companyAddress: "Indore, Madhya Pradesh, India — 452001",
+    companyName: "Nidhi Info Tech Pvt. Ltd.",
+    companyAddress: "Bhopal, Madhya Pradesh, India",
     companyGstin: "23AABCS1234F1Z5",
   },
   {
@@ -170,8 +170,8 @@ export const mockReceipts: PaymentReceipt[] = [
     paymentMethod: "UPI",
     transactionId: "UPI-BS-8821",
     generatedAt: "2026-05-28T11:00:00Z",
-    companyName: "Satyakabir Technologies Pvt. Ltd.",
-    companyAddress: "Indore, Madhya Pradesh, India — 452001",
+    companyName: "Nidhi Info Tech Pvt. Ltd.",
+    companyAddress: "Bhopal, Madhya Pradesh, India",
     companyGstin: "23AABCS1234F1Z5",
   },
   {
@@ -186,8 +186,8 @@ export const mockReceipts: PaymentReceipt[] = [
     paymentMethod: "Bank transfer",
     transactionId: "NEFT-BS-002",
     generatedAt: "2026-06-02T16:45:00Z",
-    companyName: "Satyakabir Technologies Pvt. Ltd.",
-    companyAddress: "Indore, Madhya Pradesh, India — 452001",
+    companyName: "Nidhi Info Tech Pvt. Ltd.",
+    companyAddress: "Bhopal, Madhya Pradesh, India",
     companyGstin: "23AABCS1234F1Z5",
   },
 ];
@@ -197,7 +197,7 @@ export const mockSalesInvoices: SalesInvoice[] = [
   { id: 325, number: "INV-2026-0325", customer: "Bright Solutions", customerId: 2, projectId: DEMO_PROJECT_ID, projectName: "Bright Solutions CRM Integration", installmentId: 1, installmentName: "Advance", amount: 30000, paidAmount: 30000, status: "paid", dueDate: "2026-05-15", createdAt: "2026-05-18" },
   { id: 327, number: "INV-2026-0327", customer: "Bright Solutions", customerId: 2, projectId: DEMO_PROJECT_ID, projectName: "Bright Solutions CRM Integration", installmentId: 2, installmentName: "Development", amount: 40000, paidAmount: 25000, status: "partial", dueDate: "2026-06-15", createdAt: "2026-06-01" },
   { id: 328, number: "INV-2026-0328", customer: "Bright Solutions", customerId: 2, projectId: DEMO_PROJECT_ID, projectName: "Bright Solutions CRM Integration", installmentId: 3, installmentName: "Final Delivery", amount: 30000, paidAmount: 0, status: "unpaid", dueDate: "2026-07-30", createdAt: "2026-06-01" },
-  { id: 324, number: "INV-2026-0324", customer: "Satyakabir Technologies", customerId: 3, projectId: 103, projectName: "Satyakabir Internal CMS", amount: 125000, paidAmount: 62500, status: "partial", dueDate: "2026-05-28", createdAt: "2026-05-12" },
+  { id: 324, number: "INV-2026-0324", customer: "Nidhi Info Tech", customerId: 3, projectId: 103, projectName: "Nidhi Info Tech Internal CMS", amount: 125000, paidAmount: 62500, status: "partial", dueDate: "2026-05-28", createdAt: "2026-05-12" },
   { id: 323, number: "INV-2026-0323", customer: "Metro Retail Group", customerId: 4, amount: 320000, paidAmount: 0, status: "overdue", dueDate: "2026-06-01", createdAt: "2026-05-10" },
 ];
 

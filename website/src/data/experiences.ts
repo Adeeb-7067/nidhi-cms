@@ -685,10 +685,10 @@ export function buildExperience(input: {
 export function experienceMetadata(
   data: Pick<ExperiencePayload, "seoTitle" | "seoDescription" | "title" | "sectionId" | "slug">,
 ): Metadata {
-  const title = data.seoTitle || `${data.title} — Satyakabir Technologies`;
+  const title = data.seoTitle || `${data.title} — Nidhi Info Tech`;
   const description =
     data.seoDescription ||
-    `${data.title} from Satyakabir Technologies — AI-first engineering from Bengaluru.`;
+    `${data.title} from Nidhi Info Tech — AI-first engineering.`;
   return buildPageMetadata({
     title,
     description,
@@ -703,7 +703,7 @@ export function leafExperienceMetadata(sectionId: string, slug: string): Metadat
   const leaf = leaves.find((l) => l.href === href);
   const title = leaf?.title ?? slug.replace(/-/g, " ");
   const summary =
-    leaf?.description ?? `Explore ${title} within Satyakabir Technologies.`;
+    leaf?.description ?? `Explore ${title} within Nidhi Info Tech.`;
   const data = buildExperience({
     sectionId,
     slug,

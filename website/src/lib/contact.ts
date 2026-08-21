@@ -60,12 +60,12 @@ export function buildContactMailto(
   const intent = payload.intent ?? "inquiry";
   const subject =
     intent === "newsletter"
-      ? "Newsletter signup — Satyakabir"
+      ? "Newsletter signup — Nidhi Info Tech"
       : intent === "quote"
-        ? "Project quote request — Satyakabir"
+        ? "Project quote request — Nidhi Info Tech"
         : intent === "meeting"
-          ? "Meeting request — Satyakabir"
-          : "Project inquiry — Satyakabir";
+          ? "Meeting request — Nidhi Info Tech"
+          : "Project inquiry — Nidhi Info Tech";
 
   const lines = [
     payload.name ? `Name: ${payload.name}` : null,

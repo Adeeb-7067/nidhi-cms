@@ -21,7 +21,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "We design and ship end-to-end AI product systems — model integration, retrieval, agents, evaluation, and monitoring — so intelligence becomes a reliable product surface, not a demo. Every release is gated by quality harnesses and observable in production.",
     highlight: "From first prototype to governed production AI.",
-    seoTitle: "AI Development Services — Satyakabir Technologies",
+    seoTitle: "AI Development Services — Nidhi Info Tech",
     seoDescription:
       "Production AI development: LLMs, RAG, agents, computer vision, and MLOps with evaluation, governance, and principal-led delivery.",
     pills: ["LLMs", "RAG", "Agents", "Computer vision", "NLP", "Evals", "MLOps", "Guardrails"],
@@ -66,7 +66,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "We build machine learning systems that hold up under production traffic: feature pipelines, training workflows, model serving, monitoring, and retraining loops. Forecasting, classification, ranking, and anomaly detection are engineered as operable products.",
     highlight: "Models that survive contact with real data drift.",
-    seoTitle: "Machine Learning Services — Satyakabir Technologies",
+    seoTitle: "Machine Learning Services — Nidhi Info Tech",
     seoDescription: "Production ML engineering: feature pipelines, model serving, monitoring, forecasting, and MLOps with principal-led delivery.",
     pills: ["Feature stores", "Training", "Serving", "Monitoring", "Forecasting", "Ranking", "Drift", "MLOps"],
     pipeline: [
@@ -109,7 +109,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "We build generative AI products for content, code, and decision support — with grounding, evaluation, and brand/safety controls. Copilots and content systems ship as governed product surfaces, not unbounded chat boxes.",
     highlight: "Generative systems with grounding, evals, and brand control.",
-    seoTitle: "Generative AI Development — Satyakabir Technologies",
+    seoTitle: "Generative AI Development — Nidhi Info Tech",
     seoDescription: "Generative AI copilots and content systems with RAG grounding, evaluation harnesses, safety controls, and production monitoring.",
     pills: ["Copilots", "Content gen", "Grounding", "Brand voice", "Safety", "Evals", "Caching", "Cost control"],
     relatedHints: ["/services/ai-development", "/services/llm-solutions", "/services/agentic-ai", "/contact/book-meeting"],
@@ -132,7 +132,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "LLM solutions engineered for enterprises: RAG platforms, fine-tuning when justified, governance, cost routing, and evaluation. We integrate OpenAI, Anthropic, Google, and open-weight models behind a coherent control plane.",
     highlight: "RAG, fine-tuning, and governance on one control plane.",
-    seoTitle: "LLM Solutions & RAG Platforms — Satyakabir Technologies",
+    seoTitle: "LLM Solutions & RAG Platforms — Nidhi Info Tech",
     seoDescription: "Enterprise LLM solutions: RAG, fine-tuning, model routing, evaluation, and governance across leading providers and open-weight models.",
     pills: ["RAG", "Fine-tuning", "Routing", "Guardrails", "ACL retrieval", "Evals", "Observability", "FinOps"],
     relatedHints: ["/services/ai-development", "/technologies/openai", "/services/agentic-ai", "/contact/book-meeting"],
@@ -155,7 +155,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "Agentic AI systems that plan, call tools, and complete multi-step work under guardrails. We design memory, approvals, and observability so autonomy never means unaccountable action.",
     highlight: "Autonomy with approvals, traces, and blast-radius limits.",
-    seoTitle: "Agentic AI Development — Satyakabir Technologies",
+    seoTitle: "Agentic AI Development — Nidhi Info Tech",
     seoDescription: "Production agentic AI: tool-calling agents, workflows, human approvals, evaluation, and observability for enterprise automation.",
     pills: ["Agents", "Tool calling", "Memory", "Approvals", "Workflows", "Sandboxing", "Traces", "Evals"],
       relatedHints: ["/services/ai-development", "/services/llm-solutions", "/services/product-engineering", "/contact/book-meeting"],
@@ -179,7 +179,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "High-performance web products and marketing systems that protect Core Web Vitals under real traffic. Design systems, CMS architecture, edge delivery, and experimentation ship together.",
     highlight: "Fast by default. Measurable under peak load.",
-    seoTitle: "Web Development Services — Satyakabir Technologies",
+    seoTitle: "Web Development Services — Nidhi Info Tech",
     seoDescription: "Product-grade web development with Next.js/React, design systems, edge delivery, CMS, and experimentation frameworks.",
     pills: ["Next.js", "React", "Design systems", "CMS", "Edge", "A11y", "CWV", "Experimentation"],
     relatedHints: ["/services/ui-ux-design", "/services/product-engineering", "/technologies/next-js", "/contact/get-quote"],
@@ -202,7 +202,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "Systems of record that stay agile: ERP-adjacent platforms, workflow engines, and internal tools that remove operational drag while integrating with the estate you already run.",
     highlight: "Enterprise apps operators can actually live in.",
-    seoTitle: "Enterprise Application Development — Satyakabir Technologies",
+    seoTitle: "Enterprise Application Development — Nidhi Info Tech",
     seoDescription: "Custom enterprise applications, workflow platforms, and systems of record with integration, UX, and auditability.",
     pills: ["Workflows", "Integrations", "RBAC", "Audit trails", "APIs", "Migration", "UX", "Reporting"],
     relatedHints: ["/solutions/erp", "/solutions/crm", "/services/product-engineering", "/contact/get-quote"],
@@ -225,7 +225,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "From prototype to release trains: discovery, architecture, full-stack delivery, and quality gates as one continuous craft. We embed with your PMs and designers to ship measurable product outcomes.",
     highlight: "Weekly proof in working software.",
-    seoTitle: "Product Engineering Services — Satyakabir Technologies",
+    seoTitle: "Product Engineering Services — Nidhi Info Tech",
     seoDescription: "End-to-end product engineering: discovery, design systems, full-stack delivery, QA automation, and release trains.",
     pills: ["Discovery", "Architecture", "Full-stack", "Release trains", "Feature flags", "Telemetry", "A11y", "QA"],
     relatedHints: ["/services/ui-ux-design", "/services/web-development", "/services/saas-development", "/contact/get-quote"],
@@ -248,7 +248,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "Multi-tenant SaaS platforms with billing, entitlements, tenancy isolation, and FinOps awareness. We build the product and the platform mechanics that keep margins healthy as you scale.",
     highlight: "Tenancy, billing, and reliability as product foundations.",
-    seoTitle: "SaaS Development Company — Satyakabir Technologies",
+    seoTitle: "SaaS Development Company — Nidhi Info Tech",
     seoDescription: "Multi-tenant SaaS development: entitlements, billing, isolation, APIs, observability, and growth-ready architecture.",
     pills: ["Multi-tenant", "Billing", "Entitlements", "APIs", "Isolation", "Observability", "FinOps", "Growth"],
     relatedHints: ["/services/product-engineering", "/services/cloud-engineering", "/contact/get-quote"],
@@ -271,7 +271,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "iOS, Android, and cross-platform mobile products with offline resilience, biometric security, and store-ready craft. We share domain APIs with web where it helps — and go native where users feel the difference.",
     highlight: "Native quality. Shared product truth.",
-    seoTitle: "Mobile App Development — Satyakabir Technologies",
+    seoTitle: "Mobile App Development — Nidhi Info Tech",
     seoDescription: "iOS, Android, Flutter, and React Native app development with offline support, security, and App Store-ready delivery.",
     pills: ["iOS", "Android", "Flutter", "React Native", "Offline", "Biometrics", "Push", "Store ops"],
     relatedHints: ["/services/product-engineering", "/services/ui-ux-design", "/contact/get-quote"],
@@ -301,7 +301,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "Research-driven product design and design systems that survive engineering constraints. We prototype with builders so motion, accessibility, and clarity make it to production — not just the pitch deck.",
     highlight: "Interfaces users trust before onboarding ends.",
-    seoTitle: "UI/UX Design Services — Satyakabir Technologies",
+    seoTitle: "UI/UX Design Services — Nidhi Info Tech",
     seoDescription: "Product UI/UX design, design systems, prototyping, accessibility, and motion craft paired with engineering delivery.",
     pills: ["Research", "Design systems", "Prototyping", "A11y", "Motion", "Design ops", "Usability", "Tokens"],
     relatedHints: ["/services/web-development", "/services/product-engineering", "/contact/get-quote"],
@@ -324,7 +324,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "Cloud engineering for estates that must run: AWS, Azure, and GCP landing zones, Kubernetes platforms, infrastructure automation, observability, FinOps, and disaster recovery — sequenced so operators stay in control.",
     highlight: "Landing zones first. Workloads when the platform is real.",
-    seoTitle: "Cloud Engineering Services — Satyakabir Technologies",
+    seoTitle: "Cloud Engineering Services — Nidhi Info Tech",
     seoDescription: "Cloud architecture and engineering on AWS, Azure, and GCP: landing zones, Kubernetes, IaC, FinOps, SRE, and migration programs.",
     pills: ["AWS", "Azure", "GCP", "Kubernetes", "Terraform", "FinOps", "SRE", "DR"],
     pipeline: [
@@ -368,7 +368,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "DevOps and platform engineering that turn release anxiety into a predictable machine: CI/CD, GitOps, progressive delivery, infrastructure-as-code, and SRE practices with clear reliability budgets.",
     highlight: "Ship faster without gambling production.",
-    seoTitle: "DevOps & Platform Engineering — Satyakabir Technologies",
+    seoTitle: "DevOps & Platform Engineering — Nidhi Info Tech",
     seoDescription: "CI/CD, GitOps, Kubernetes, IaC, progressive delivery, and SRE practices for reliable software delivery.",
     pills: ["CI/CD", "GitOps", "Kubernetes", "IaC", "Progressive delivery", "SRE", "Chaos", "DX"],
     relatedHints: ["/services/cloud-engineering", "/services/qa-automation", "/contact/get-quote"],
@@ -391,7 +391,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     summary:
       "Transformation programs that land in production: capability maps, target architecture, migration sequencing, operating model change, and enablement — executed by the same principals who write the code.",
     highlight: "Strategy with an implementation spine.",
-    seoTitle: "Digital Transformation Consulting — Satyakabir Technologies",
+    seoTitle: "Digital Transformation Consulting — Nidhi Info Tech",
     seoDescription: "Digital transformation with architecture blueprints, migration waves, operating model redesign, and hands-on delivery.",
     pills: ["Roadmaps", "Architecture", "Migration", "Operating model", "Change", "Enablement", "OKRs", "Governance"],
     relatedHints: ["/services/technology-consulting", "/services/cloud-engineering", "/solutions/enterprise-solutions", "/contact/book-meeting"],
@@ -415,7 +415,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
       "Digital services that ship: websites and web apps, mobile products, UX systems, and digital transformation programs — engineered as one practice so customer journeys and back-office systems stay aligned.",
     highlight: "Digital products businesses can operate — not brochureware.",
     eyebrow: "Services · Digital Services",
-    seoTitle: "Digital Services — Satyakabir Technologies",
+    seoTitle: "Digital Services — Nidhi Info Tech",
     seoDescription:
       "Digital services from Satyakabir: web development, mobile apps, UI/UX, and digital transformation with principal-led engineering.",
     pills: [

@@ -171,7 +171,7 @@ export const projectCatalog = projects.map((project) => {
       `The client needed a ${project.sector.toLowerCase()} platform that could scale without sacrificing reliability or operator trust. ${project.desc}`,
     solution:
       study?.solution ??
-      "Satyakabir embedded a principal-led pod to frame architecture, ship in risk-ordered slices, and transfer ownership with runbooks and ADRs — so the client team could evolve the system after launch.",
+      "Nidhi Info Tech embedded a principal-led pod to frame architecture, ship in risk-ordered slices, and transfer ownership with runbooks and ADRs — so the client team could evolve the system after launch.",
     results: study
       ? study.metrics.map((m) => ({ label: m.label, value: m.value }))
       : [

@@ -13,7 +13,7 @@ export const salesExecutives: SalesExecutive[] = [
   {
     id: 1,
     name: "Malik Naushad",
-    email: "malik@satyakabir.com",
+    email: "malik@nidhiinfotech.com",
     role: "sales_manager",
     dealsClosed: 89,
     revenue: 2450000,
@@ -23,7 +23,7 @@ export const salesExecutives: SalesExecutive[] = [
   {
     id: 2,
     name: "Sana Khan",
-    email: "sana@satyakabir.com",
+    email: "sana@nidhiinfotech.com",
     role: "sales_executive",
     dealsClosed: 62,
     revenue: 1580000,
@@ -33,7 +33,7 @@ export const salesExecutives: SalesExecutive[] = [
   {
     id: 3,
     name: "Rahul Verma",
-    email: "rahul@satyakabir.com",
+    email: "rahul@nidhiinfotech.com",
     role: "sales_executive",
     dealsClosed: 45,
     revenue: 980000,
@@ -43,7 +43,7 @@ export const salesExecutives: SalesExecutive[] = [
   {
     id: 4,
     name: "Priya Sharma",
-    email: "priya@satyakabir.com",
+    email: "priya@nidhiinfotech.com",
     role: "sales_executive",
     dealsClosed: 38,
     revenue: 720000,
@@ -100,10 +100,10 @@ export const mockLeads: Lead[] = [
   },
   {
     id: 6680,
-    name: "Satyakabir Technologies",
-    email: "info@satyakabir.com",
+    name: "Nidhi Info Tech",
+    email: "info@nidhiinfotech.com",
     phone: "+91 75555 12345",
-    company: "Satyakabir Technologies",
+    company: "Nidhi Info Tech",
     source: "linkedin",
     status: "converted",
     priority: "high",
@@ -329,13 +329,13 @@ export const mockCustomers: Customer[] = [
   },
   {
     id: 3,
-    companyName: "Satyakabir Technologies",
+    companyName: "Nidhi Info Tech",
     contactPerson: "Malik Naushad",
-    email: "info@satyakabir.com",
+    email: "info@nidhiinfotech.com",
     phone: "+91 75555 12345",
     status: "active",
     type: "corporate",
-    location: "Indore",
+    location: "Bhopal",
     totalSales: 1200000,
     outstanding: 125000,
     createdAt: "2025-06-01T00:00:00Z",
@@ -390,7 +390,7 @@ export const mockNotifications: SalesNotification[] = [
 
 export const mockPayments: PaymentRecord[] = [
   { id: 1, invoiceNumber: "INV-2026-0126", customerName: "Agrolink Manufacturing", amount: 450000, dueDate: "2026-05-10", status: "overdue" },
-  { id: 2, invoiceNumber: "INV-2026-0125", customerName: "Satyakabir Technologies", amount: 125000, dueDate: "2026-05-28", status: "unpaid" },
+  { id: 2, invoiceNumber: "INV-2026-0125", customerName: "Nidhi Info Tech", amount: 125000, dueDate: "2026-05-28", status: "unpaid" },
   { id: 3, invoiceNumber: "INV-2026-0120", customerName: "Bright Solutions", amount: 530000, dueDate: "2026-05-15", status: "paid" },
 ];
 
@@ -465,15 +465,16 @@ export const salesOverviewMay = [
   { day: "31 May", invoices: 720000, payments: 690000 },
 ];
 
-export const invoiceSummary = [
-  { name: "Paid", count: 126, value: 38.65 },
+export const invoiceStatusBreakdown = [
+  { name: "Paid", count: 345, value: 105.8 },
+  { name: "Overdue", count: 24, value: 7.36 },
   { name: "Unpaid", count: 145, value: 44.48 },
   { name: "Partial", count: 55, value: 16.87 },
 ];
 
 export const topCustomersBySales = [
   { rank: 1, name: "Agrolink Manufacturing Pvt. Ltd.", amount: 2450000 },
-  { rank: 2, name: "Satyakabir Technologies", amount: 1200000 },
+  { rank: 2, name: "Nidhi Info Tech", amount: 1200000 },
   { rank: 3, name: "Bright Solutions", amount: 680000 },
   { rank: 4, name: "Metro Retail Group", amount: 320000 },
   { rank: 5, name: "CloudNine Hospitality", amount: 180000 },
@@ -531,7 +532,7 @@ export const mockPaymentRecords = [
   { id: 1, invoice: "INV-2026-0325", customer: "Bright Solutions", amount: 30000, mode: "Bank transfer", date: "2026-05-20", status: "completed" as const, installmentName: "Advance", receiptId: 1, receiptNumber: "RCT-2026-0041" },
   { id: 2, invoice: "INV-2026-0327", customer: "Bright Solutions", amount: 10000, mode: "UPI", date: "2026-05-28", status: "partial" as const, installmentName: "Development", receiptId: 2, receiptNumber: "RCT-2026-0042" },
   { id: 3, invoice: "INV-2026-0327", customer: "Bright Solutions", amount: 15000, mode: "Bank transfer", date: "2026-06-02", status: "partial" as const, installmentName: "Development", receiptId: 3, receiptNumber: "RCT-2026-0043" },
-  { id: 4, invoice: "INV-2026-0324", customer: "Satyakabir Technologies", amount: 62500, mode: "UPI", date: "2026-05-22", status: "partial" as const },
+  { id: 4, invoice: "INV-2026-0324", customer: "Nidhi Info Tech", amount: 62500, mode: "UPI", date: "2026-05-22", status: "partial" as const },
   { id: 5, invoice: "INV-2026-0120", customer: "Agrolink Manufacturing", amount: 450000, mode: "NEFT", date: "2026-05-08", status: "completed" as const, installmentName: "Advance (40%)" },
 ];
 

@@ -1,26 +1,26 @@
 export const site = {
-  brand: "Satyakabir Technologies",
-  brandShort: "SK",
-  email: "info@satyakabir.com",
+  brand: "Nidhi Info Tech",
+  brandShort: "NI",
+  email: "info@nidhiinfotech.com",
   phone: "+91 89599 77624",
-  location: "Bengaluru · Remote-first · Global delivery",
+  location: "Bhopal · Remote-first · Global delivery",
   tagline: "Crafting tomorrow's digital foundations, today.",
   mission:
     "To engineer AI-first software systems that feel effortless to use and impossible to outgrow — pairing research-grade engineering with human-centered design.",
   vision:
     "A world where every ambitious organization can operate on infrastructure that is intelligent, secure, and beautiful by default.",
-  copyright: "© 2026 Satyakabir Technologies Pvt. Ltd. All rights reserved.",
+  copyright: "© 2026 Nidhi Info Tech Pvt. Ltd. All rights reserved.",
   socials: {
-    linkedin: "https://www.linkedin.com/company/satya-kabir-e-solutions-pvt-ltd",
-    website: "https://satyakabir.com",
+    linkedin: "https://www.linkedin.com/company/nidhiinfotech",
+    website: "https://nidhiinfotech.com",
   },
 };
 
 export const hero = {
-  eyebrow: "Satyakabir Technologies",
+  eyebrow: "Nidhi Info Tech",
   badge: "Enter headquarters",
-  titleLine1: "Satyakabir",
-  titleLine2: "Technologies",
+  titleLine1: "Nidhi Info",
+  titleLine2: "Tech",
   statement: "The digital face of AI-first engineering.",
   subtitle:
     "AI-first systems, resilient cloud platforms, and human-centric software for ambitious companies.",
@@ -36,7 +36,7 @@ export const hero = {
 export const about = {
   chapter: "Chapter 01 · Origin",
   title: ["Precision.", "Imagination.", "Systems."],
-  lead: "We are a collective of engineers, designers, researchers, and operators who treat software as both infrastructure and craft. Satyakabir exists for leaders who refuse average technology.",
+  lead: "We are a collective of engineers, designers, researchers, and operators who treat software as both infrastructure and craft. Nidhi Info Tech exists for leaders who refuse average technology.",
   body: [
     "Founded on the conviction that technology must be powerful and human at once, we build products that outlast the moment they were created. Our teams embed beside yours: shared rituals, shared metrics, shared ownership of outcomes.",
     "From AI-native platforms to cloud estates spanning continents, every architecture decision is a commitment to precision, observability, security, and long-term compound growth.",
@@ -51,7 +51,7 @@ export const about = {
   ceoQuote: {
     quote:
       "Software should feel inevitable once it exists — precise under pressure, elegant under complexity, and worthy of the people who run it at 3 a.m.",
-    name: "Satyakabir Leadership",
+    name: "Nidhi Info Tech Leadership",
     role: "Founding principals",
   },
   values: [
@@ -357,7 +357,7 @@ export const industries = [
 export const testimonials = [
   {
     quote:
-      "Satyakabir didn't just build our platform — they rethought how we serve ten million users. The system they architected processes 2.3M events per second without breaking a sweat, and our operators finally trust the dashboards they live in.",
+      "Nidhi Info Tech didn't just build our platform — they rethought how we serve ten million users. The system they architected processes 2.3M events per second without breaking a sweat, and our operators finally trust the dashboards they live in.",
     name: "Arjun Mehta",
     role: "CTO, NexusAI",
     company: "Backed by YC · Series B",

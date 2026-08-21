@@ -326,7 +326,7 @@ export default function Login() {
                 animate="show"
                 className="whitespace-nowrap text-sm font-bold leading-normal tracking-tight text-slate-900 sm:text-base xl:text-lg"
               >
-                Satya Kabir E Solutions Private Limited
+                {BRAND.name}
               </motion.p>
             </div>
 

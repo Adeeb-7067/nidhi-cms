@@ -24,7 +24,7 @@ const SEED_PAGES = [
     pageType: "landing",
     status: "PUBLISHED",
     seo: {
-      title: "Satyakabir Technologies | Future of Digital Transformation",
+      title: "Nidhi Info Tech | Future of Digital Transformation",
       description: "Enterprise AI Solutions, Custom Software Engineering, and Modern Web Systems.",
     },
     draftBlocks: [
@@ -140,8 +140,8 @@ async function runSeed() {
   await websiteSettingsTable.findOneAndUpdate(
     {},
     {
-      brandName: "Satyakabir Technologies",
-      contactEmail: "contact@satyakabir.com",
+      brandName: "Nidhi Info Tech",
+      contactEmail: "contact@nidhiinfotech.com",
       contactPhone: "+91 755 493 8888",
       address: "Bhopal, Madhya Pradesh, India",
       headerMenu: [
@@ -155,12 +155,12 @@ async function runSeed() {
         { label: "Terms of Service", href: "/terms" },
       ],
       socialLinks: {
-        linkedin: "https://linkedin.com/company/satyakabir",
-        github: "https://github.com/satyakabir",
-        twitter: "https://twitter.com/satyakabir",
+        linkedin: "https://linkedin.com/company/nidhiinfotech",
+        github: "https://github.com/nidhiinfotech",
+        twitter: "https://twitter.com/nidhiinfotech",
       },
       seoDefaults: {
-        titleTemplate: "%s | Satyakabir Technologies",
+        titleTemplate: "%s | Nidhi Info Tech",
         defaultDescription: "Enterprise Software Engineering & AI Solutions.",
       },
     },

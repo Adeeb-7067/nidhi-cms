@@ -160,10 +160,10 @@ export const FINANCIAL_EVENT_LABELS: Record<FinancialEventType, string> = {
 };
 
 export const COMPANY_BILLING = {
-  name: "Satyakabir Technologies Pvt. Ltd.",
-  address: "Indore, Madhya Pradesh, India — 452001",
+  name: "Nidhi Info Tech Pvt. Ltd.",
+  address: "Bhopal, Madhya Pradesh, India",
   gstin: "23AABCS1234F1Z5",
-  email: "accounts@satyakabir.com",
+  email: "accounts@nidhiinfotech.com",
   phone: "+91 75555 12345",
 };
 

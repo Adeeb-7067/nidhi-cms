@@ -18,10 +18,10 @@ import type {
 export const FINANCE_ACCESS_ROLES = ["super_admin", "finance"] as const;
 
 export const COMPANY_FINANCE = {
-  name: "Satyakabir Technologies Pvt. Ltd.",
-  address: "Indore, Madhya Pradesh, India — 452001",
+  name: "Nidhi Info Tech Pvt. Ltd.",
+  address: "Bhopal, Madhya Pradesh, India",
   gstin: "23AABCS1234F1Z5",
-  email: "finance@satyakabir.com",
+  email: "finance@nidhiinfotech.com",
   phone: "+91 75555 12345",
   pan: "AABCS1234F",
 };

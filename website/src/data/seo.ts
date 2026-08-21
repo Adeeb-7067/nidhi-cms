@@ -10,9 +10,9 @@ export const SITE_URL = (
 
 export const SITE_NAME = site.brand;
 export const DEFAULT_TITLE =
-  "Satyakabir Technologies — AI, Cloud & Product Engineering";
+  "Nidhi Info Tech — AI, Cloud & Product Engineering";
 export const DEFAULT_DESCRIPTION =
-  "Satyakabir Technologies builds AI-first platforms, cloud estates, and product software from Bengaluru — principal-led engineering for ambitious organizations worldwide.";
+  "Nidhi Info Tech builds AI-first platforms, cloud estates, and product software — principal-led engineering for ambitious organizations worldwide.";
 
 export const DEFAULT_OG_IMAGE = `${SITE_URL}/brand/og-default.jpg`;
 export const SITE_LOGO_IMAGE = `${SITE_URL}/brand/sk-icon-512.png`;
@@ -63,7 +63,7 @@ export function buildPageMetadata({
   const url = absoluteUrl(path);
   const desc = truncateMeta(description);
   const brandSuffix = ` — ${SITE_NAME}`;
-  const fullTitle = /satyakabir technologies/i.test(title)
+  const fullTitle = /nidhi info tech/i.test(title)
     ? title
     : `${title}${brandSuffix}`;
 
@@ -108,13 +108,13 @@ const HUB_SEO: Record<
   company: {
     title: "Company",
     description:
-      "About Satyakabir Technologies — mission, leadership, culture, infrastructure, partners, and global delivery from Bengaluru.",
-    keywords: ["Satyakabir", "about", "AI company Bengaluru", "engineering culture"],
+      "About Nidhi Info Tech — mission, leadership, culture, infrastructure, partners, and global delivery.",
+    keywords: ["Nidhi Info Tech", "about", "engineering culture", "software solutions"],
   },
   services: {
     title: "Services",
     description:
-      "AI development, cloud engineering, product engineering, DevOps, security, and digital transformation services from Satyakabir.",
+      "AI development, cloud engineering, product engineering, DevOps, security, and digital transformation services from Nidhi Info Tech.",
     keywords: ["AI development", "cloud engineering", "product engineering", "DevOps"],
   },
   solutions: {
@@ -138,26 +138,26 @@ const HUB_SEO: Record<
   work: {
     title: "Work",
     description:
-      "Featured projects, case studies, portfolio, open source, and client success stories from Satyakabir Technologies.",
+      "Featured projects, case studies, portfolio, open source, and client success stories from Nidhi Info Tech.",
     keywords: ["case studies", "portfolio", "client success"],
   },
   insights: {
     title: "Insights",
     description:
-      "Blog, research, whitepapers, news, events, and FAQs from Satyakabir practitioners.",
+      "Blog, research, whitepapers, news, events, and FAQs from Nidhi Info Tech practitioners.",
     keywords: ["engineering blog", "AI research", "whitepapers"],
   },
   careers: {
     title: "Careers",
     description:
-      "Join Satyakabir — open roles, internships, benefits, hiring process, and craft culture for engineers and designers.",
-    keywords: ["engineering jobs", "Bengaluru careers", "AI jobs", "internships"],
+      "Join Nidhi Info Tech — open roles, internships, benefits, hiring process, and craft culture for engineers and designers.",
+    keywords: ["engineering jobs", "AI jobs", "internships", "developer careers"],
   },
   contact: {
     title: "Contact",
     description:
-      "Contact Satyakabir Technologies — book a meeting, get a quote, support, and office locations.",
-    keywords: ["contact", "get quote", "book meeting", "Bengaluru office"],
+      "Contact Nidhi Info Tech — book a meeting, get a quote, support, and office locations.",
+    keywords: ["contact", "get quote", "book meeting", "office"],
   },
 };
 
@@ -167,7 +167,7 @@ export function hubMetadata(sectionId: string): Metadata {
   const title = hub?.title ?? section?.label ?? sectionId;
   const description =
     hub?.description ??
-    `Explore ${title} at Satyakabir Technologies — AI-first engineering from Bengaluru.`;
+    `Explore ${title} at Nidhi Info Tech — AI-first engineering.`;
   return buildPageMetadata({
     title,
     description,
